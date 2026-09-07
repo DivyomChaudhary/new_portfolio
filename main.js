@@ -248,8 +248,10 @@
     chatInput.value = "";
     logQuestion(text);
 
-    var typing = appendMessage("...", "bot");
+    // Add typing bubble with blinking cursor
+    var typing = appendMessage("▍", "bot");
     typing.classList.add("msg-typing");
+    var typingP = typing.querySelector("p");
 
     try {
       var res = await fetch("/api/chat", {
@@ -258,45 +260,97 @@
         body: JSON.stringify({ question: text })
       });
 
-      var data = await res.json();
-
+      // 429 comes back as JSON before SSE is established
       if (res.status === 429) {
-        typing.querySelector("p").textContent = "Daily limit reached (5 questions). Come back tomorrow!";
+        typingP.textContent = "Daily limit reached. Come back tomorrow!";
+        typing.classList.remove("msg-typing");
         setThrottledUI();
         return;
       }
 
-      if (!res.ok) {
-        typing.querySelector("p").textContent = "Couldn't reach the AI right now. Email divyomchaudhary@gmail.com for a faster reply!";
+      if (!res.ok || !res.body) {
+        typingP.textContent = "Couldn't reach the AI right now. Email divyomchaudhary@gmail.com for a faster reply!";
+        typing.classList.remove("msg-typing");
         return;
       }
 
-      typing.querySelector("p").textContent = data.answer || "No response.";
-      typing.classList.remove("msg-typing");
+      // ── Stream reading ────────────────────────────────────────────────────────
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var sseBuffer = "";
+      var fullText = "";
+      var started = false;
 
-      // Highlight relevant nav section based on chatbot answer topic
-      var answerLower = (data.answer || "").toLowerCase();
-      if (/project|netraflow|level_up|stokd|skill|python|aws|langchain|pytorch|docker|numpy|pandas/.test(answerLower)) {
-        highlightNav("work");
-      } else if (/education|b\.tech|miet|degree|college/.test(answerLower)) {
-        highlightNav("education");
-      } else if (/contact|email|linkedin|hire|reach|connect/.test(answerLower)) {
-        highlightNav("contact");
-      } else if (/certification|aws certified|certificate/.test(answerLower)) {
-        highlightNav("work");
+      while (true) {
+        var readResult = await reader.read();
+        if (readResult.done) break;
+
+        sseBuffer += decoder.decode(readResult.value, { stream: true });
+        // SSE frames end with double newline
+        var frames = sseBuffer.split("\n\n");
+        sseBuffer = frames.pop(); // keep incomplete frame
+
+        for (var i = 0; i < frames.length; i++) {
+          var frame = frames[i].trim();
+          if (!frame.startsWith("data: ")) continue;
+          try {
+            var evt = JSON.parse(frame.slice(6));
+
+            if (evt.error) {
+              typingP.textContent = "Something went wrong. Email divyomchaudhary@gmail.com!";
+              typing.classList.remove("msg-typing");
+              break;
+            }
+
+            if (evt.chunk) {
+              if (!started) {
+                // First real text — clear the cursor placeholder
+                fullText = "";
+                started = true;
+              }
+              fullText += evt.chunk;
+              typingP.textContent = fullText + " ▍"; // live cursor
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            if (evt.done) {
+              // Remove cursor, finalise text
+              typingP.textContent = fullText;
+              typing.classList.remove("msg-typing");
+
+              // Nav highlight
+              var al = fullText.toLowerCase();
+              if (/project|netraflow|level_up|stokd|skill|python|aws|langchain|pytorch|docker|numpy|pandas/.test(al)) {
+                highlightNav("work");
+              } else if (/education|b\.tech|miet|degree|college/.test(al)) {
+                highlightNav("education");
+              } else if (/contact|email|linkedin|hire|reach|connect/.test(al)) {
+                highlightNav("contact");
+              }
+
+              // Update rate badge
+              info.used++;
+              saveRateInfo(info);
+              var remaining = typeof evt.remaining === "number" ? evt.remaining : Math.max(0, LIMIT - info.used);
+              updateRateBadge(remaining);
+              if (remaining === 0) setThrottledUI();
+            }
+          } catch (_) { /* skip malformed SSE frame */ }
+        }
       }
 
-      // Update local counter
-      info.used++;
-      saveRateInfo(info);
-      var remaining = typeof data.remaining === "number" ? data.remaining : Math.max(0, LIMIT - info.used);
-      updateRateBadge(remaining);
-      if (remaining === 0) setThrottledUI();
+      // Fallback: if stream ended without a done event, clean up cursor
+      if (fullText && typingP.textContent.endsWith(" ▍")) {
+        typingP.textContent = fullText;
+        typing.classList.remove("msg-typing");
+      }
 
     } catch (err) {
-      typing.querySelector("p").textContent = "Connection issue. Please try again or email divyomchaudhary@gmail.com.";
+      typingP.textContent = "Connection issue. Please try again or email divyomchaudhary@gmail.com.";
+      typing.classList.remove("msg-typing");
     }
   }
+
 
   if (chatForm) {
     chatForm.addEventListener("submit", function (e) {
@@ -567,18 +621,6 @@
     document.querySelectorAll(".card, .toolbox-card, .achieve-card, .edu-card, .contact-card, .stat-card").forEach(function (el) {
       if (!el.classList.contains("rise")) revealIO.observe(el);
     });
-  }
-
-  /* ══════════════════════════════════════════════════════
-     9. SPEECH BUBBLE — add "visible" class after pop-in animation
-  ══════════════════════════════════════════════════════ */
-  var chatBubble = document.getElementById("chatBubbleBtn");
-  if (chatBubble) {
-    // After 2.6s (pop-in animation completes), mark permanently visible
-    setTimeout(function () {
-      chatBubble.classList.add("visible");
-      chatBubble.style.opacity = "1"; // belt-and-suspenders guarantee
-    }, 2600);
   }
 
 })();

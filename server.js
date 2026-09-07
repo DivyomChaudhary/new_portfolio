@@ -1,7 +1,7 @@
 /**
  * server.js — Portfolio backend proxy
  * - Serves all static files
- * - Proxies /api/chat to Gemini 3.6 Flash (API key never leaves server)
+ * - Proxies /api/chat to Groq (API key never leaves server)
  * - Rate-limits chatbot to 10 requests per IP per 24 hours
  * - /api/auth: email+password login (owner only), returns signed JWT-like token
  * - /api/auth/verify: verifies token for dashboard access
@@ -10,13 +10,13 @@
 
 require("dotenv").config();
 const express = require("express");
-const fetch = require("node-fetch");
-const path = require("path");
-const crypto = require("crypto");
+const fetch   = require("node-fetch");  // used for non-streaming requests
+const path    = require("path");
+const crypto  = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY  = (process.env.GROQ_API_KEY  || "").trim();
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || "").toLowerCase().trim();
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || "";
 
@@ -147,7 +147,7 @@ Email: divyomchaudhary@gmail.com
 LinkedIn: https://www.linkedin.com/in/divyom-chaudhary
 GitHub: https://www.github.com/DivyomChaudhary
 
-Current Status: Final-year B.Tech CS student (graduating 2026). Has received some employment offers that are late in their onboarding process. Available for internships immediately and full-time from mid-2026 onwards.
+Current Status: B.Tech CSE graduate - 2026 batch. Constantly searching for the right opportunity. Available for freshers roles in AI/ML and Data Science.
 
 Education:
 - Senior Secondary (Class XII, CBSE, PCM + CS), Completed 2022
@@ -156,25 +156,37 @@ Education:
 Achievement: TPO top 5% programmers — Rank 12/500 across all CSE-allied branches at MIET, 2025–2026
 
 Certification: AWS Certified Cloud Practitioner (CLF-C02), Jul 2025, Valid through Jul 2028
-Verify: https://cp.certmetrics.com/amazon/en/public/verify/credential/a26c7a8fad414f9ba36ef928af16322a
 
 Projects:
 1. NetraFlow (2025-Present) — Traffic Edge Security System
    - Real-time video & data pipeline with Python, SQLite, AWS S3 across 400+ deployment zones
    - Agentic RAG dashboard with LangGraph for natural-language analytical queries
    - Cut model inference time by 66% via multithreaded preprocessing
-   - GitHub: https://github.com/DivyomChaudhary/NetraFlow
+   - Find more in the projects section
 
 2. Level_Up (2026) — Habit Builder & Routine Planning System
    - Gamification engine with multi-tier quests, penalty/reward logic, streak tracking
    - NLP parser classifying free-text into 3 schedule tiers, AI task planning
    - Accountability system with UPI wallet — QR payments and fund-freezing on missed goals
-   - GitHub: https://github.com/DivyomChaudhary/Level_Up_The_System
+   - Find more in the projects section
 
 3. Stokd (Under Development) — AI/ML enabled Inventory and Stock management
    - Stock and inventory tracking for everyday item management
+   - Ask me for collaboration in the contacts section
 
-Skills: Python, SQL, PyTorch, LangChain, LangGraph, Pandas, NumPy, Streamlit, Reflex, Git, GitHub, Docker, Linux, AWS, Terraform, SQLite, MySQL, PostgreSQL, RAG, Machine Learning, NLP, Generative AI, CUDNN
+Open to relocation: Yes, willing to relocate for the right opportunity, especially Bangalore, Delhi NCR, Hyderabad and Gurugram.
+
+Working remotely: Yes, wholeheartedly accepts remote work.
+
+What sets you apart from other candidates?: Believes in continuous self-improvement and strong work ethic. Proved by projects and GitHub profile, visible in the projects and contact sections.
+
+What are you doing right now: Has some offers from on-campus opportunities, waiting for their onboarding details.
+
+How much salary are you expecting?: Flexible depending on total compensation, role, and location. Expected range: 6 LPA to 10 LPA. Actively upskilling in AI, cloud, and data science to hit the ground running.
+
+Why should we hire you?: Believes in showing proof of work instead of listing soft skills. The work is waiting to be explored in the portfolio.
+
+Skills: Python, SQL, PyTorch, LangChain, LangGraph, Pandas, NumPy, Streamlit, Git, GitHub, Docker, Linux, AWS, Terraform, SQLite, MySQL, PostgreSQL, RAG, Machine Learning, NLP, Generative AI, CUDNN
 
 Contact: divyomchaudhary@gmail.com
 Resume: https://drive.google.com/file/d/1JuBGFE1qIOhJW1V6c6dUDudGLlS9y1yY/view`;
@@ -182,6 +194,7 @@ Resume: https://drive.google.com/file/d/1JuBGFE1qIOhJW1V6c6dUDudGLlS9y1yY/view`;
 // Simple markdown → plain text converter for bot responses
 function mdToText(text) {
   return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")  // strip reasoning chain-of-thought
     .replace(/\*\*(.+?)\*\*/g, "$1")   // bold
     .replace(/\*(.+?)\*/g, "$1")        // italic
     .replace(/^#{1,6}\s+/gm, "")        // headings
@@ -189,55 +202,113 @@ function mdToText(text) {
     .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1"); // links
 }
 
-// ── /api/chat — Chatbot proxy ─────────────────────────────────────────────────
+// ── /api/chat — Chatbot proxy with Groq streaming ───────────────────────────
 app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
   const { question } = req.body;
-  if (!question || typeof question !== "string" || question.trim().length === 0) {
+  if (!question || typeof question !== "string" || question.trim().length === 0)
     return res.status(400).json({ error: "No question provided" });
-  }
   const safeQuestion = question.trim().slice(0, 400);
+  if (!GROQ_API_KEY)
+    return res.status(500).json({ error: "AI API key not configured" });
 
-  if (!GEMINI_API_KEY) return res.status(500).json({ error: "API key not configured" });
-
-  const fullPrompt =
-    "[SYSTEM] You are a casual, friendly portfolio assistant for Divyom Chaudhary. " +
+  const systemPrompt =
+    "You are a casual, friendly portfolio assistant for Divyom Chaudhary. " +
     "Keep every reply to 2-3 short sentences — plain text only, no asterisks or markdown. " +
     "Be warm and direct, like texting a friend. " +
-    "End each reply with a natural suggestion to check the relevant section of his portfolio (e.g. 'Check out his Projects section!'). " +
+    "End each reply with a natural suggestion to check the relevant section of his portfolio. " +
     "For certifications: just say the name and year, skip verification links. " +
     "If something isn't in the resume, admit it briefly and point to divyomchaudhary@gmail.com. " +
     "Never list more than 3 things — summarise instead. " +
     "Only answer from the resume data below.\n\n" +
-    "=== RESUME ===\n" + RESUME_CONTEXT + "\n=== END ===" +
-    "\n\n[VISITOR QUESTION] " + safeQuestion;
+    "=== RESUME ===\n" + RESUME_CONTEXT + "\n=== END ===";
 
+  // ─ Open SSE stream to browser ─────────────────────────────
+  res.setHeader("Content-Type",      "text/event-stream");
+  res.setHeader("Cache-Control",     "no-cache");
+  res.setHeader("Connection",        "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const sseWrite = (obj) => {
+    try { res.write("data: " + JSON.stringify(obj) + "\n\n"); } catch (_) {}
+  };
+
+
+  // ─ Call Groq with node-fetch streaming ─────────────────────────────────
+  const postBody = JSON.stringify({
+    model:       "groq/compound-mini",
+    messages:    [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: safeQuestion }
+    ],
+    stream:      true,
+    max_tokens:  250,
+    temperature: 0.45
+  });
+
+  console.log(`[chat] q="${safeQuestion.slice(0, 60)}" groq_key_len=${GROQ_API_KEY.length}`);
+
+  let groqRes;
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
-    const geminiRes = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-        generationConfig: { temperature: 0.45 }
-      })
+    groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type":  "application/json"
+      },
+      body: postBody
     });
-
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.text();
-      console.error("Gemini error:", geminiRes.status, errBody.slice(0, 200));
-      return res.status(502).json({ error: "upstream_error" });
-    }
-
-    const data = await geminiRes.json();
-    let answer = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "No response generated.";
-    answer = mdToText(answer);
-
-    return res.json({ answer, remaining: req.rateLimitRemaining, limit: CHAT_LIMIT });
-  } catch (err) {
-    console.error("Fetch error:", err.message);
-    return res.status(502).json({ error: "network_error" });
+  } catch (netErr) {
+    console.error("[chat] fetch error:", netErr.message);
+    sseWrite({ error: true, message: "network_error" });
+    return res.end();
   }
+
+  console.log(`[chat] Groq HTTP status: ${groqRes.status}`);
+
+  if (!groqRes.ok) {
+    const errText = await groqRes.text().catch(() => "");
+    console.error(`[chat] Groq ${groqRes.status}:`, errText.slice(0, 300));
+    sseWrite({ error: true, message: "upstream_error", status: groqRes.status });
+    return res.end();
+  }
+
+  // ─ Parse OpenAI SSE stream ───────────────────────────────────────────────
+  let buf = "";
+  groqRes.body.setEncoding("utf8");
+
+  groqRes.body.on("data", (chunk) => {
+    buf += chunk;
+    const frames = buf.split("\n\n");
+    buf = frames.pop();
+    for (const frame of frames) {
+      const line = frame.trim();
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const json = JSON.parse(payload);
+        const text = json.choices?.[0]?.delta?.content;
+        if (text) sseWrite({ chunk: mdToText(text) });
+      } catch (_) {}
+    }
+  });
+
+  groqRes.body.on("end", () => {
+    sseWrite({ done: true, remaining: req.rateLimitRemaining, limit: CHAT_LIMIT });
+    res.end();
+  });
+
+  groqRes.body.on("error", (err) => {
+    console.error("[chat] stream error:", err.message);
+    sseWrite({ error: true, message: "stream_error" });
+    res.end();
+  });
+
+  req.on("close", () => { try { groqRes.body.destroy(); } catch (_) {} });
+
 });
+
 
 // ── /api/ratelimit/reset — DEV ONLY: reset your IP's count (localhost only) ─────
 app.get("/api/ratelimit/reset", (req, res) => {
@@ -263,12 +334,16 @@ app.get("/api/ratelimit", (req, res) => {
   res.json({ remaining: Math.max(0, CHAT_LIMIT - entry.count), limit: CHAT_LIMIT, resetAt: entry.resetAt });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n✅ Portfolio server running at http://localhost:${PORT}`);
-  console.log(`   Gemini API key: ${GEMINI_API_KEY ? "✓ loaded" : "✗ MISSING"}`);
-  console.log(`   Owner email: ${OWNER_EMAIL || "✗ MISSING"}`);
-  console.log(`   Owner password: ${OWNER_PASSWORD ? "✓ loaded" : "✗ MISSING"}`);
-  console.log(`   Chatbot rate limit: ${CHAT_LIMIT} questions per 24h per IP`);
-  console.log(`   Login brute-force protection: ${LOGIN_LIMIT} attempts per 15 min\n`);
-});
+// ── Start server ─────────────────────────────────────────────────────────────
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`\n✅ Portfolio server running at http://localhost:${PORT}`);
+    console.log(`   Groq API key:  ${GROQ_API_KEY  ? "✓ loaded" : "✗ MISSING — add GROQ_API_KEY to .env"}`);
+    console.log(`   Owner email: ${OWNER_EMAIL || "✗ MISSING"}`);
+    console.log(`   Owner password: ${OWNER_PASSWORD ? "✓ loaded" : "✗ MISSING"}`);
+    console.log(`   Chatbot rate limit: ${CHAT_LIMIT} questions per 24h per IP`);
+    console.log(`   Login brute-force protection: ${LOGIN_LIMIT} attempts per 15 min\n`);
+  });
+}
+
+module.exports = app;

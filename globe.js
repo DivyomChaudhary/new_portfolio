@@ -37,28 +37,24 @@
     {
       name: "AWS", color: "#232F3E",
       draw: function (ctx) {
-        // White "aws" letters — top half of icon
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 1.6;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        // A
-        ctx.beginPath(); ctx.moveTo(1.5, 14); ctx.lineTo(4.5, 6); ctx.lineTo(7.5, 14); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(2.5, 11.5); ctx.lineTo(6.5, 11.5); ctx.stroke();
-        // W
-        ctx.beginPath(); ctx.moveTo(9, 6); ctx.lineTo(10.5, 14); ctx.lineTo(12, 10); ctx.lineTo(13.5, 14); ctx.lineTo(15, 6); ctx.stroke();
-        // S — two half-arcs
-        ctx.beginPath(); ctx.arc(18.5, 9, 2.5, Math.PI * 0.1, Math.PI * 0.9, false); ctx.stroke();
-        ctx.beginPath(); ctx.arc(18.5, 12.5, 2.5, Math.PI * 1.1, Math.PI * 1.9, false); ctx.stroke();
-        // Orange smile arc — bottom of icon, clearly separate from letters
+        // "aws" in white — clean, readable, no distortion
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 8.5px 'Arial Narrow', Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("aws", 12, 10);
+        // Orange smile arc beneath the text
         ctx.strokeStyle = "#FF9900";
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2;
         ctx.lineCap = "round";
-        ctx.beginPath(); ctx.arc(10.5, 21, 8, Math.PI * 1.18, Math.PI * 1.82, false); ctx.stroke();
-        // Arrow tip at right of smile
-        ctx.beginPath(); ctx.moveTo(17.8, 18.2); ctx.lineTo(18.5, 20.5); ctx.lineTo(16.2, 20); ctx.stroke();
-      },
-      useStroke: true
+        ctx.beginPath();
+        ctx.arc(12, 18, 5, Math.PI * 0.15, Math.PI * 0.85, false);
+        ctx.stroke();
+        // Arrow tip at the right end of the smile
+        ctx.beginPath();
+        ctx.moveTo(16.2, 15.8); ctx.lineTo(17, 18); ctx.lineTo(15, 17.5);
+        ctx.stroke();
+      }
     },
 
     /* ── PyTorch ─────────────────────────────────────────────────────────────── */
