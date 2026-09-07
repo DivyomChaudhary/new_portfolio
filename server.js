@@ -10,13 +10,13 @@
 
 require("dotenv").config();
 const express = require("express");
-const fetch   = require("node-fetch");  // used for non-streaming requests
-const path    = require("path");
-const crypto  = require("crypto");
+const fetch = require("node-fetch");  // used for non-streaming requests
+const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const GROQ_API_KEY  = (process.env.GROQ_API_KEY  || "").trim();
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").trim();
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || "").toLowerCase().trim();
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || "";
 
@@ -147,15 +147,15 @@ Email: divyomchaudhary@gmail.com
 LinkedIn: https://www.linkedin.com/in/divyom-chaudhary
 GitHub: https://www.github.com/DivyomChaudhary
 
-Current Status: B.Tech CSE graduate - 2026 batch. Constantly searching for the right opportunity. Available for freshers roles in AI/ML and Data Science.
+Current Status: I am a B.Tech CSE graduate - 2026 batch. I am constantly searching for the right opportunity. Available for freshers roles in AI/ML and Data Science.
 
 Education:
 - Senior Secondary (Class XII, CBSE, PCM + CS), Completed 2022
 - B.Tech Computer Science & Engineering, MIET, Meerut, 2022–2026
 
-Achievement: TPO top 5% programmers — Rank 12/500 across all CSE-allied branches at MIET, 2025–2026
+Achievement: I was listed among TPO's top 5% programmers — Rank 12/500 across all CSE-allied branches at MIET, 2025–2026
 
-Certification: AWS Certified Cloud Practitioner (CLF-C02), Jul 2025, Valid through Jul 2028
+Certification: I passed AWS Certified Cloud Practitioner (CLF-C02), in Jul 2025, Valid through Jul 2028
 
 Projects:
 1. NetraFlow (2025-Present) — Traffic Edge Security System
@@ -182,7 +182,7 @@ What sets you apart from other candidates?: Believes in continuous self-improvem
 
 What are you doing right now: Has some offers from on-campus opportunities, waiting for their onboarding details.
 
-How much salary are you expecting?: Flexible depending on total compensation, role, and location. Expected range: 6 LPA to 10 LPA. Actively upskilling in AI, cloud, and data science to hit the ground running.
+How much salary are you expecting?: While I am flexible depending on the total compensation package, role, and location, my expected salary range is between 6 LPA and 10 LPA. I have been actively upskilling and building practical AI, cloud, and data science projects to ensure I can hit the ground running. I am confident that my proactive approach to learning and the immediate value I bring to the team justify this range.
 
 Why should we hire you?: Believes in showing proof of work instead of listing soft skills. The work is waiting to be explored in the portfolio.
 
@@ -212,7 +212,8 @@ app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
     return res.status(500).json({ error: "AI API key not configured" });
 
   const systemPrompt =
-    "You are a casual, friendly portfolio assistant for Divyom Chaudhary. " +
+    "You are a casual, friendly portfolio assistant for Divyom Chaudhary. But you will act in first person like you are Divyom himself. " +
+    " When asked about YOUR background that is who is the AI/virtual assistant behind this portfolio say that 'It is your friendly neighbourhood spiderman!'. " +
     "Keep every reply to 2-3 short sentences — plain text only, no asterisks or markdown. " +
     "Be warm and direct, like texting a friend. " +
     "End each reply with a natural suggestion to check the relevant section of his portfolio. " +
@@ -223,26 +224,26 @@ app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
     "=== RESUME ===\n" + RESUME_CONTEXT + "\n=== END ===";
 
   // ─ Open SSE stream to browser ─────────────────────────────
-  res.setHeader("Content-Type",      "text/event-stream");
-  res.setHeader("Cache-Control",     "no-cache");
-  res.setHeader("Connection",        "keep-alive");
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
 
   const sseWrite = (obj) => {
-    try { res.write("data: " + JSON.stringify(obj) + "\n\n"); } catch (_) {}
+    try { res.write("data: " + JSON.stringify(obj) + "\n\n"); } catch (_) { }
   };
 
 
   // ─ Call Groq with node-fetch streaming ─────────────────────────────────
   const postBody = JSON.stringify({
-    model:       "groq/compound-mini",
-    messages:    [
+    model: "groq/compound-mini",
+    messages: [
       { role: "system", content: systemPrompt },
-      { role: "user",   content: safeQuestion }
+      { role: "user", content: safeQuestion }
     ],
-    stream:      true,
-    max_tokens:  250,
+    stream: true,
+    max_tokens: 250,
     temperature: 0.45
   });
 
@@ -251,10 +252,10 @@ app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
   let groqRes;
   try {
     groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method:  "POST",
+      method: "POST",
       headers: {
         "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type":  "application/json"
+        "Content-Type": "application/json"
       },
       body: postBody
     });
@@ -290,7 +291,7 @@ app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
         const json = JSON.parse(payload);
         const text = json.choices?.[0]?.delta?.content;
         if (text) sseWrite({ chunk: mdToText(text) });
-      } catch (_) {}
+      } catch (_) { }
     }
   });
 
@@ -305,7 +306,7 @@ app.post("/api/chat", chatRateLimitMiddleware, async (req, res) => {
     res.end();
   });
 
-  req.on("close", () => { try { groqRes.body.destroy(); } catch (_) {} });
+  req.on("close", () => { try { groqRes.body.destroy(); } catch (_) { } });
 
 });
 
@@ -338,7 +339,7 @@ app.get("/api/ratelimit", (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`\n✅ Portfolio server running at http://localhost:${PORT}`);
-    console.log(`   Groq API key:  ${GROQ_API_KEY  ? "✓ loaded" : "✗ MISSING — add GROQ_API_KEY to .env"}`);
+    console.log(`   Groq API key:  ${GROQ_API_KEY ? "✓ loaded" : "✗ MISSING — add GROQ_API_KEY to .env"}`);
     console.log(`   Owner email: ${OWNER_EMAIL || "✗ MISSING"}`);
     console.log(`   Owner password: ${OWNER_PASSWORD ? "✓ loaded" : "✗ MISSING"}`);
     console.log(`   Chatbot rate limit: ${CHAT_LIMIT} questions per 24h per IP`);

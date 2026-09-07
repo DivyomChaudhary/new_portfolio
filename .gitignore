@@ -7,7 +7,6 @@
 
 # testing
 /coverage
-
 # production
 /build
 
@@ -27,3 +26,14 @@ yarn-error.log*
 
 Server/node_modules
 Server/config.js
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Build artifacts
+*.log
