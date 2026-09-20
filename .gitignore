@@ -5,6 +5,11 @@
 /.pnp
 .pnp.js
 
+# protecting my own data
+*.jpg
+*.jpeg
+*.png
+
 # testing
 /coverage
 # production
